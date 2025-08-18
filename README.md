@@ -27,6 +27,14 @@ conda activate fedllm
 pip install -r requirements.txt
 source setup.sh
 ```
+## Installation
+
+We recommend using the `install.sh` script, which automatically detects your Python version
+and installs the correct dependencies.
+
+```bash
+bash install.sh
+
 
 ## Training
 
