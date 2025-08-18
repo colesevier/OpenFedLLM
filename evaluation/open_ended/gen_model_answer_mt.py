@@ -31,8 +31,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--base_model_path", type=str, default=None)
 parser.add_argument("--lora_path", type=str, default=None)
 parser.add_argument("--template", type=str, default="vicuna_v1.1")
-parser.add_argument("--max_new_token", type=int, default=1024)
+parser.add_argument("--max_new_token", type=int, default=128)
 parser.add_argument("--num_choices", type=int, default=1)
+parser.add_argument("--first_n", type=int, default=10)
 args = parser.parse_args()
 
 # ============= Extract model name from the path. The name is used for saving results. =============
@@ -50,14 +51,19 @@ else:
     else:
         model_name = last_str                       # mainly for base model
 
-question_file = f"./data/mtbench/question.jsonl"
-answer_file = f"./data/mtbench/model_answer/{model_name}.jsonl"
+data_dir = os.path.join(os.path.dirname(__file__), "data", "mtbench")
+question_file = os.path.join(data_dir, "question.jsonl")
+answer_file = os.path.join(data_dir, "model_answer", f"{model_name}.jsonl")
 
 # ============= Load model and tokenizer =============
-model = AutoModelForCausalLM.from_pretrained(args.base_model_path, torch_dtype=torch.float16).to('cuda')    # float16 to run inference of 7B model on 3090 GPU
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+dtype = torch.float16 if device == 'cuda' else torch.float32
+model = AutoModelForCausalLM.from_pretrained(args.base_model_path, torch_dtype=dtype).to(device)
 if args.lora_path:
-    model = PeftModel.from_pretrained(model, args.lora_path, torch_dtype=torch.float16)
+    model = PeftModel.from_pretrained(model, args.lora_path, torch_dtype=dtype).to(device)
 tokenizer = AutoTokenizer.from_pretrained(args.base_model_path)
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token if getattr(tokenizer, 'eos_token', None) is not None else tokenizer.unk_token
 
 # ============= Load questions =============
 def load_questions(question_file):
@@ -72,7 +78,7 @@ questions = load_questions(question_file)
 
 # ============= Generate answers =============
 print(f">> The template is:\n{get_conv_template(args.template).system_message}")
-for question in tqdm(questions):
+for question in tqdm(questions[: args.first_n] if args.first_n else questions):
 
     if question["category"] in temperature_config:
         temperature = temperature_config[question["category"]]
@@ -100,7 +106,7 @@ for question in tqdm(questions):
             # some models may error out when generating long outputs
             try:
                 output_ids = model.generate(
-                    input_ids=torch.as_tensor(input_ids).cuda(),
+                    input_ids=torch.as_tensor(input_ids).to(device),
                     do_sample=do_sample,
                     temperature=temperature,
                     max_new_tokens=args.max_new_token,

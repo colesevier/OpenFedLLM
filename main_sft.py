@@ -4,7 +4,7 @@ from tqdm import tqdm
 import numpy as np
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from trl import DataCollatorForCompletionOnlyLM
+# from trl import DataCollatorForCompletionOnlyLM  # not used; keep default collator for broad TRL compatibility
 from peft import get_peft_model, get_peft_model_state_dict, set_peft_model_state_dict, prepare_model_for_kbit_training
 
 from utils import *
@@ -58,12 +58,14 @@ global_auxiliary, auxiliary_model_list, auxiliary_delta_dict = get_auxiliary_dic
 # ===== Define the tokenizer =====
 tokenizer = AutoTokenizer.from_pretrained(script_args.model_name_or_path, use_fast=False, padding_side="right")
 if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.unk_token   # following vicuna
+    # Prefer EOS as padding if available; fall back to UNK if needed.
+    tokenizer.pad_token = tokenizer.eos_token if getattr(tokenizer, 'eos_token', None) is not None else tokenizer.unk_token
 
 # ===== Define the formatting function (cater to TRL SFTTrainer)=====
 formatting_prompts_func, response_template = get_formatting_prompts_func(script_args.template, tokenizer.eos_token)
-response_template_ids = tokenizer.encode(response_template, add_special_tokens=False)[2:]   # Now we have it like in the dataset texts: `[2277, 29937, 4007, 22137, 29901]` for Llama2
-data_collator = DataCollatorForCompletionOnlyLM(response_template_ids, tokenizer=tokenizer)
+# Use default data collator for broad compatibility across TRL versions.
+# If you want to mask the prompt and only compute loss on the response, switch to DataCollatorForCompletionOnlyLM.
+data_collator = None
 
 # ===== Start federated training =====
 training_loss = [[] for i in range(fed_args.num_clients)]

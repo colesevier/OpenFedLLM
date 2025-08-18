@@ -8,7 +8,7 @@ import torch
 
 from datasets import Dataset, load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from trl import DataCollatorForCompletionOnlyLM, DPOTrainer
+from trl import DPOTrainer
 from peft import get_peft_model, get_peft_model_state_dict, set_peft_model_state_dict, prepare_model_for_kbit_training, AutoPeftModelForCausalLM
 
 from utils import *
@@ -18,6 +18,11 @@ from config import get_config, save_config, get_model_config, get_training_args
 # ===== Define the arguments =====
 script_args, fed_args, peft_config = get_config()
 training_args = get_training_args(script_args, script_args.learning_rate)
+# Ensure TRL DPOTrainer-compatible attributes exist on training_args
+if not hasattr(training_args, 'model_init_kwargs'):
+    setattr(training_args, 'model_init_kwargs', None)
+if not hasattr(training_args, 'ref_model_init_kwargs'):
+    setattr(training_args, 'ref_model_init_kwargs', None)
 save_config(script_args, fed_args)
 print(script_args, fed_args)
 
@@ -58,7 +63,13 @@ if script_args.load_in_8bit or script_args.load_in_4bit:
                 model, use_gradient_checkpointing=training_args.gradient_checkpointing
             )
 
-model = get_peft_model(model, peft_config)
+# Initialize PEFT adapters. If init_lora_path is provided, load from that checkpoint to enable SFT→DPO.
+if script_args.use_peft and script_args.init_lora_path:
+    from peft import PeftModel
+    model = PeftModel.from_pretrained(model, script_args.init_lora_path, is_trainable=True)
+else:
+    model = get_peft_model(model, peft_config)
+
 model.print_trainable_parameters()
 
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
@@ -75,7 +86,7 @@ global_auxiliary, auxiliary_model_list, auxiliary_delta_dict = get_auxiliary_dic
 # ===== Define the tokenizer =====
 tokenizer = AutoTokenizer.from_pretrained(script_args.model_name_or_path, use_fast=False, padding_side="right")
 if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.unk_token   # following vicuna
+    tokenizer.pad_token = tokenizer.eos_token if getattr(tokenizer, 'eos_token', None) is not None else tokenizer.unk_token
 
 # ===== Start federated training =====
 training_loss = [[] for i in range(fed_args.num_clients)]
