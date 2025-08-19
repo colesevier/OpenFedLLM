@@ -29,22 +29,28 @@ source setup.sh
 ```
 ## Installation
 
-# ===== MacOS =====
+## MacOS
 # Uses install-mac.sh to automate pyenv + venv + deps
+```
 bash install-mac.sh
 source venv/bin/activate
+```
 
-# ===== Linux (Ubuntu) =====
+## Linux (Ubuntu)
+```
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+```
 
-# ===== Windows (PowerShell) =====
+## Windows (PowerShell)
+```
 python -m venv venv
 venv\Scripts\activate
 pip install --upgrade pip
 pip install -r requirements.txt
+```
 
 
 
