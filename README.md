@@ -29,11 +29,23 @@ source setup.sh
 ```
 ## Installation
 
-We recommend using the `install.sh` script, which automatically detects your Python version
-and installs the correct dependencies.
+# ===== MacOS =====
+# Uses install-mac.sh to automate pyenv + venv + deps
+bash install-mac.sh
+source venv/bin/activate
 
-```bash
-bash install.sh
+# ===== Linux (Ubuntu) =====
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# ===== Windows (PowerShell) =====
+python -m venv venv
+venv\Scripts\activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
 
 
 ## Training
