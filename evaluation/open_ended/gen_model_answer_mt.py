@@ -56,14 +56,16 @@ question_file = os.path.join(data_dir, "question.jsonl")
 answer_file = os.path.join(data_dir, "model_answer", f"{model_name}.jsonl")
 
 # ============= Load model and tokenizer =============
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = 'cpu'
 dtype = torch.float16 if device == 'cuda' else torch.float32
 model = AutoModelForCausalLM.from_pretrained(args.base_model_path, torch_dtype=dtype).to(device)
 if args.lora_path:
     model = PeftModel.from_pretrained(model, args.lora_path, torch_dtype=dtype).to(device)
 tokenizer = AutoTokenizer.from_pretrained(args.base_model_path)
 if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token if getattr(tokenizer, 'eos_token', None) is not None else tokenizer.unk_token
+    tokenizer.pad_token = tokenizer.eos_token
+
+
 
 # ============= Load questions =============
 def load_questions(question_file):
@@ -96,7 +98,8 @@ for question in tqdm(questions[: args.first_n] if args.first_n else questions):
             conv.append_message(conv.roles[0], qs)
             conv.append_message(conv.roles[1], None)
             prompt = conv.get_prompt()
-            input_ids = tokenizer([prompt]).input_ids
+            inputs = tokenizer(prompt, return_tensors="pt", padding=True)
+
 
             if temperature < 1e-4:
                 do_sample = False
@@ -106,7 +109,9 @@ for question in tqdm(questions[: args.first_n] if args.first_n else questions):
             # some models may error out when generating long outputs
             try:
                 output_ids = model.generate(
-                    input_ids=torch.as_tensor(input_ids).to(device),
+                    input_ids=inputs["input_ids"].to(device),
+                    attention_mask=inputs["attention_mask"].to(device),
+                    pad_token_id=tokenizer.pad_token_id,
                     do_sample=do_sample,
                     temperature=temperature,
                     max_new_tokens=args.max_new_token,
@@ -114,7 +119,7 @@ for question in tqdm(questions[: args.first_n] if args.first_n else questions):
                 if model.config.is_encoder_decoder:
                     output_ids = output_ids[0]
                 else:
-                    output_ids = output_ids[0][len(input_ids[0]) :]
+                    output_ids = output_ids[0][len(inputs["input_ids"][0]) :]
 
                 # be consistent with the template's stop_token_ids
                 if conv.stop_token_ids:

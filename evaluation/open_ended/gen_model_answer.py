@@ -113,7 +113,7 @@ if args.use_vllm:
         json.dump(result_list, f, indent=4)
 
 else:
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cpu'
     dtype = torch.float16 if device == 'cuda' else torch.float32
     model = AutoModelForCausalLM.from_pretrained(args.base_model_path, torch_dtype=dtype).to(device)
     if args.lora_path is not None:
